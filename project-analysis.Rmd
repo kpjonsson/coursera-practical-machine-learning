@@ -1,0 +1,62 @@
+---
+title: "Practical Machine Learning Project"
+author: "Philip Jonsson"
+date: "October 20, 2014"
+output: html_document
+---
+
+The following analysis creates a random forest predictor for the 'classe' label in the Weight Lifting Exercise Dataset (http://groupware.les.inf.puc-rio.br/har).
+
+A random forest predictor works well with large sets of variables, which is the case here, and can also give information on what predictors are important in classification. Although hard to interpret, random forests generally perform well on classification problemsand large datasets. For these reasons, it is a good choice for this particular task.
+
+Set up workspace:
+```{r, message=FALSE, warning=FALSE}
+library(caret); set.seed(123)
+```
+
+The dataset consists of a separate CSV file for training and testing, respectively.
+```{r}
+training = read.csv('pml-training.csv', header = T)
+testing = read.csv('pml-testing.csv', header = T)
+```
+
+Clean up the data frames for further analysis. The data contains many 'empty' variables and other peculiarities.
+```{r}
+# Prepare test set
+test = testing[,-which(lapply(testing, class) == 'logical')]
+
+# Clean up training data
+train = na.omit(training) # remove rows with NAs
+train = train[, which(colnames(training) %in% colnames(test))] # remove variables not present in test set
+train = train[,-which(lapply(train, class) == 'character')] # remove columns with nonsense data
+train = train[, -1] # remove the X column
+```
+
+Do not forget to retain the response label ('classe').
+```{r}
+train_resp = as.factor(training[rownames(train), 'classe'])
+```
+
+Standardize the data by centering and scaling.
+```{r}
+pre_proc = preProcess(train, method = c('center', 'scale'))
+train_pred = predict(pre_proc, train)
+
+# Put together the data frame used for analysis
+training_new = data.frame(train_pred, classe = train_resp)
+```
+
+Create a random forest predictor for the 'classe' variable. Note that for random forests, each tree is constructed with a bootstrap sample and left out samples are run through the generated tree. From this the out-of-bag (OOB) error rate is estimated and this procedure eliminates the need for any further cross-validatation.
+```{r, message=FALSE, warning=FALSE}
+model_rf = train(classe~., data = training_new, method = 'rf', prox = T, importance = T)
+```
+```{r}
+model_rf$finalModel
+```
+
+As indicated, the OOB estimated error rate is 16%. Use the predictor to make predictions on the test test.
+```{r}
+test = test[, which(colnames(test) %in% colnames(train))] # make sure the test set has the right variables
+test_pred = predict(pre_proc, test) # standardize the test set data
+results = predict(model_rf, newdata = test)
+```
