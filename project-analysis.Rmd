@@ -23,27 +23,22 @@ testing = read.csv('pml-testing.csv', header = T)
 Clean up the data frames for further analysis. The data contains many 'empty' variables and other peculiarities.
 ```{r}
 # Prepare test set
-test = testing[,-which(lapply(testing, class) == 'logical')]
+test = testing[,-which(lapply(testing, class) == 'logical')] # remove NA variables
+test = test[,-c(1:7,60)] # remove columns containing IDs, rather than data variables
 
 # Clean up training data
-train = na.omit(training) # remove rows with NAs
-train = train[, which(colnames(training) %in% colnames(test))] # remove variables not present in test set
-train = train[,-which(lapply(train, class) == 'character')] # remove columns with nonsense data
-train = train[, -1] # remove the X column
+train = dplyr::filter(training, new_window == 'yes')
+train = train[, which(colnames(train) %in% colnames(test))] # remove variables not present in test set
 ```
 
 Do not forget to retain the response label ('classe').
 ```{r}
-train_resp = as.factor(training[rownames(train), 'classe'])
+train_resp = as.factor(dplyr::filter(training, new_window == 'yes')$classe)
 ```
 
-Standardize the data by centering and scaling.
+Put together the data frame used for analysis
 ```{r}
-pre_proc = preProcess(train, method = c('center', 'scale'))
-train_pred = predict(pre_proc, train)
-
-# Put together the data frame used for analysis
-training_new = data.frame(train_pred, classe = train_resp)
+training_new = data.frame(train, classe = train_resp)
 ```
 
 Create a random forest predictor for the 'classe' variable. Note that for random forests, each tree is constructed with a bootstrap sample and left out samples are run through the generated tree. From this the out-of-bag (OOB) error rate is estimated and this procedure eliminates the need for any further cross-validatation.
@@ -56,7 +51,5 @@ model_rf$finalModel
 
 As indicated, the OOB estimated error rate is 16%. Use the predictor to make predictions on the test test.
 ```{r}
-test = test[, which(colnames(test) %in% colnames(train))] # make sure the test set has the right variables
-test_pred = predict(pre_proc, test) # standardize the test set data
 results = predict(model_rf, newdata = test)
 ```
